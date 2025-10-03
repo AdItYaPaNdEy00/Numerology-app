@@ -3,26 +3,34 @@ console.log("📦 Backend file loaded successfully");
 
 const express = require("express");
 const cors = require("cors");
+const compression = require("compression");
+
+const isProduction = process.env.NODE_ENV === "production";
 
 const app = express();
+app.disable("x-powered-by");
 app.use(cors());
-app.use(express.json());
+app.use(compression());
+app.use(express.json({ limit: "16kb" }));
 
-// Helper: reduce to single digit
-function reduceToSingleDigit(num) {
-  while (num > 9) {
-    num = num.toString().split("").reduce((a, b) => a + Number(b), 0);
-  }
-  return num;
+// Helper: compute digital root (single digit) efficiently
+function digitalRoot(num) {
+  if (num === 0) return 0;
+  return 1 + ((num - 1) % 9);
 }
 
 function calculateMoolank(day) {
-  return reduceToSingleDigit(day);
+  return digitalRoot(day);
 }
 
 function calculateBhagyank(dob) {
-  const digits = dob.replaceAll("-", "").split("").map(Number);
-  return reduceToSingleDigit(digits.reduce((a, b) => a + b));
+  const cleaned = dob.replaceAll("-", "");
+  let sum = 0;
+  for (let i = 0; i < cleaned.length; i++) {
+    const code = cleaned.charCodeAt(i) - 48; // '0' => 48
+    if (code >= 0 && code <= 9) sum += code;
+  }
+  return digitalRoot(sum);
 }
 
 // ---------------------- Moolank Info ------------------------
@@ -77,6 +85,7 @@ for (let m = 1; m <= 9; m++) {
 
 // ---------------------- Root Route ------------------------
 app.get("/", (req, res) => {
+  res.set("Cache-Control", "public, max-age=300");
   res.send("🔮 Numerology API is running...");
 });
 
@@ -92,10 +101,12 @@ app.post("/api/predict", (req, res) => {
   const moolank = calculateMoolank(day);
   const bhagyank = calculateBhagyank(dob);
 
-  console.log("🔥 BACKEND HIT");
-  console.log("DOB:", dob);
-  console.log("Moolank:", moolank);
-  console.log("Bhagyank:", bhagyank);
+  if (!isProduction) {
+    console.log("🔥 BACKEND HIT");
+    console.log("DOB:", dob);
+    console.log("Moolank:", moolank);
+    console.log("Bhagyank:", bhagyank);
+  }
 
   res.json({
     moolank,
